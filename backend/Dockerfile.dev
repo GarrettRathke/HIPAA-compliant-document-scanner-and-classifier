@@ -1,0 +1,17 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+WORKDIR /app
+
+# Copy project file and restore dependencies
+COPY src/HelloWorld.Api/*.csproj src/HelloWorld.Api/
+RUN dotnet restore src/HelloWorld.Api/HelloWorld.Api.csproj
+
+# Copy source code
+COPY . .
+
+WORKDIR /app/src/HelloWorld.Api
+
+EXPOSE 5000
+
+# Use dotnet watch for hot reload
+ENTRYPOINT ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:5000"]

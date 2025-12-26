@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+    volumes:
+      - ./backend:/app:cached
+      - /app/bin
+      - /app/obj
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app
+          ignore:
+            - bin/
+            - obj/
+            - node_modules/
+    networks:
+      - helloworld-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4200:4200"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app:cached
+      - /app/node_modules
+    develop:
+      watch:
+        - path: ./frontend/src
+          action: sync
+          target: /app/src
+          ignore:
+            - node_modules/
+    depends_on:
+      - backend
+    networks:
+      - helloworld-network
+
+networks:
+  helloworld-network:
+    driver: bridge
+
+volumes:
+  node_modules:

@@ -1,0 +1,33 @@
+{
+  "name": "helloworld-monorepo",
+  "version": "1.0.0",
+  "description": "HelloWorld monorepo with .NET 10 backend and Angular frontend",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "dev:watch": "docker-compose -f docker-compose.dev.yml watch",
+    "dev:down": "docker-compose -f docker-compose.dev.yml down",
+    "dev:clean": "docker-compose -f docker-compose.dev.yml down -v --remove-orphans && docker system prune -f",
+    "dev:logs": "docker-compose -f docker-compose.dev.yml logs -f",
+    "dev:backend": "docker-compose -f docker-compose.dev.yml up backend",
+    "dev:frontend": "docker-compose -f docker-compose.dev.yml up frontend",
+    "backend:build": "cd backend && dotnet build",
+    "backend:test": "cd backend && dotnet test",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:test": "cd frontend && npm run test"
+  },
+  "keywords": [
+    "monorepo",
+    "dotnet",
+    "angular",
+    "docker",
+    "helloworld"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
