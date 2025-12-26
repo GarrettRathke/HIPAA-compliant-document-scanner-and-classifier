@@ -9,7 +9,7 @@ import { HelloWorldResponse } from '../../models/hello-world-response.model';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './hello-world.component.html',
-  styleUrls: ['./hello-world.component.scss']
+  styleUrls: ['./hello-world.component.scss'],
 })
 export class HelloWorldComponent implements OnInit {
   message: string = '';
@@ -18,7 +18,7 @@ export class HelloWorldComponent implements OnInit {
   isLoading: boolean = false;
   error: string = '';
 
-  constructor(private apiService: ApiService) { }
+  constructor(private apiService: ApiService) {}
 
   ngOnInit(): void {
     this.loadHello();
@@ -27,7 +27,7 @@ export class HelloWorldComponent implements OnInit {
   loadHello(): void {
     this.isLoading = true;
     this.error = '';
-    
+
     this.apiService.getHello().subscribe({
       next: (response: HelloWorldResponse) => {
         this.message = response.message;
@@ -38,7 +38,7 @@ export class HelloWorldComponent implements OnInit {
         this.error = 'Failed to load message from API';
         this.isLoading = false;
         console.error('API Error:', error);
-      }
+      },
     });
   }
 
@@ -49,7 +49,7 @@ export class HelloWorldComponent implements OnInit {
 
     this.isLoading = true;
     this.error = '';
-    
+
     this.apiService.getHelloWithName(this.name.trim()).subscribe({
       next: (response: HelloWorldResponse) => {
         this.message = response.message;
@@ -60,7 +60,7 @@ export class HelloWorldComponent implements OnInit {
         this.error = 'Failed to load personalized message from API';
         this.isLoading = false;
         console.error('API Error:', error);
-      }
+      },
     });
   }
 }

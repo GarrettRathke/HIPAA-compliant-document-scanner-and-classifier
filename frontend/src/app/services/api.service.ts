@@ -4,12 +4,12 @@ import { Observable } from 'rxjs';
 import { HelloWorldResponse } from '../models/hello-world-response.model';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ApiService {
   private readonly apiUrl = '/api/hello';
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {}
 
   getHello(): Observable<HelloWorldResponse> {
     return this.http.get<HelloWorldResponse>(this.apiUrl);

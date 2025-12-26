@@ -2,47 +2,44 @@
   <div class="card">
     <h1>Hello World Application</h1>
     <p class="subtitle">Angular Frontend + .NET 10 API Backend</p>
-    
+
     <div class="message-section">
       <h2>API Response:</h2>
-      
-      <div *ngIf="isLoading" class="loading">
-        Loading...
-      </div>
-      
+
+      <div *ngIf="isLoading" class="loading">Loading...</div>
+
       <div *ngIf="error" class="error">
         {{ error }}
       </div>
-      
+
       <div *ngIf="!isLoading && !error" class="response">
         <p class="message">{{ message }}</p>
         <p class="timestamp">Received at: {{ timestamp }}</p>
       </div>
     </div>
-    
+
     <div class="actions">
-      <button 
-        (click)="loadHello()" 
-        [disabled]="isLoading"
-        class="btn btn-primary">
+      <button (click)="loadHello()" [disabled]="isLoading" class="btn btn-primary">
         Get Hello Message
       </button>
     </div>
-    
+
     <div class="personalized-section">
       <h3>Get Personalized Message:</h3>
       <div class="input-group">
-        <input 
-          type="text" 
-          [(ngModel)]="name" 
+        <input
+          type="text"
+          [(ngModel)]="name"
           placeholder="Enter your name"
           [disabled]="isLoading"
           class="form-input"
-          (keyup.enter)="loadHelloWithName()">
-        <button 
-          (click)="loadHelloWithName()" 
+          (keyup.enter)="loadHelloWithName()"
+        />
+        <button
+          (click)="loadHelloWithName()"
           [disabled]="isLoading || !name.trim()"
-          class="btn btn-secondary">
+          class="btn btn-secondary"
+        >
           Get Personal Hello
         </button>
       </div>
