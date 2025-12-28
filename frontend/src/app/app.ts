@@ -1,12 +1,11 @@
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { HelloWorldComponent } from './components/hello-world/hello-world.component';
 import { ReceiptUploadComponent } from './components/receipt-upload/receipt-upload.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommonModule, HelloWorldComponent, ReceiptUploadComponent],
+  imports: [RouterOutlet, CommonModule, ReceiptUploadComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

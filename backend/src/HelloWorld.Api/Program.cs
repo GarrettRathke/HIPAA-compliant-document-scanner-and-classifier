@@ -1,4 +1,10 @@
+using HelloWorld.Api.Models;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure secrets
+builder.Configuration.AddUserSecrets<Program>();
+builder.Services.Configure<OpenAISettings>(builder.Configuration.GetSection("OpenAI"));
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -10,9 +16,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Configure OpenAI and file upload settings
-builder.Services.Configure<HelloWorld.Api.Models.OpenAISettings>(
+builder.Services.Configure<OpenAISettings>(
     builder.Configuration.GetSection("OpenAI"));
-builder.Services.Configure<HelloWorld.Api.Models.FileUploadSettings>(
+builder.Services.Configure<FileUploadSettings>(
     builder.Configuration.GetSection("FileUpload"));
 
 // Register services
