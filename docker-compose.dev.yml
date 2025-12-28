@@ -10,6 +10,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5000
+      - OpenAI__ApiKey=${OPENAI_API_KEY:-}
     volumes:
       - ./backend:/app:cached
       - /app/bin
