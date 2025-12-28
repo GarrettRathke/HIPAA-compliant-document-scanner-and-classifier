@@ -1,0 +1,108 @@
+<div class="receipt-upload-container">
+  <div class="card">
+    <h1>Receipt Data Extraction</h1>
+    <p class="subtitle">Upload a receipt or invoice image to extract data using AI</p>
+
+    <!-- File Upload Area -->
+    <div 
+      class="upload-area"
+      [class.drag-over]="dragOver"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <div *ngIf="!selectedFile" class="upload-placeholder">
+        <div class="upload-icon">📄</div>
+        <p>Drag and drop your receipt image here</p>
+        <p class="upload-hint">or click to select a file</p>
+        <input 
+          type="file" 
+          accept=".png,.jpg,.jpeg" 
+          (change)="onFileSelected($event)"
+          class="file-input"
+        />
+        <button class="btn btn-secondary" onclick="this.previousElementSibling.click()">
+          Select File
+        </button>
+      </div>
+
+      <!-- File Preview -->
+      <div *ngIf="selectedFile" class="file-preview">
+        <div class="preview-image">
+          <img [src]="previewUrl" [alt]="selectedFile.name" />
+        </div>
+        <div class="file-info">
+          <h3>{{ selectedFile.name }}</h3>
+          <p>{{ (selectedFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+          <div class="file-actions">
+            <button 
+              (click)="processReceipt()" 
+              [disabled]="isProcessing" 
+              class="btn btn-primary"
+            >
+              <span *ngIf="isProcessing">Processing...</span>
+              <span *ngIf="!isProcessing">Extract Data</span>
+            </button>
+            <button 
+              (click)="clearSelection()" 
+              [disabled]="isProcessing" 
+              class="btn btn-secondary"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Display -->
+    <div *ngIf="error" class="error">
+      {{ error }}
+    </div>
+
+    <!-- Processing Status -->
+    <div *ngIf="isProcessing" class="loading">
+      <div class="spinner"></div>
+      <p>Analyzing receipt with AI... This may take a few seconds.</p>
+    </div>
+
+    <!-- Extraction Results -->
+    <div *ngIf="extractionResult" class="results-section">
+      <h2>Extracted Data</h2>
+      
+      <div class="status-info">
+        <span class="status" [class]="extractionResult.processingStatus.toLowerCase()">
+          {{ extractionResult.processingStatus }}
+        </span>
+        <span class="timestamp">
+          Processed at: {{ extractionResult.processedAt | date:'medium' }}
+        </span>
+      </div>
+
+      <div *ngIf="extractionResult.errorMessage" class="error">
+        {{ extractionResult.errorMessage }}
+      </div>
+
+      <div *ngIf="getExtractedDataEntries().length > 0" class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let entry of getExtractedDataEntries()">
+              <td class="field-name">{{ entry[0] }}</td>
+              <td class="field-value">{{ entry[1] }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div *ngIf="getExtractedDataEntries().length === 0" class="no-data">
+        <p>No data could be extracted from the image.</p>
+      </div>
+    </div>
+  </div>
+</div>

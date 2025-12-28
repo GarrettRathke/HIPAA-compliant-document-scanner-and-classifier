@@ -1,7 +1,7 @@
 <div class="hello-world-container">
   <div class="card">
-    <h1>Hello World Application</h1>
-    <p class="subtitle">Angular Frontend + .NET 10 API Backend</p>
+    <h1>Receipt / Invoice Parser</h1>
+    <p class="subtitle">Upload an image, and we'll parse it for you.</p>
 
     <div class="message-section">
       <h2>API Response:</h2>
@@ -19,9 +19,7 @@
     </div>
 
     <div class="actions">
-      <button (click)="loadHello()" [disabled]="isLoading" class="btn btn-primary">
-        Get Hello Message
-      </button>
+      <button (click)="loadHello()" class="btn btn-primary">Get Hello Message</button>
     </div>
 
     <div class="personalized-section">
@@ -31,15 +29,10 @@
           type="text"
           [(ngModel)]="name"
           placeholder="Enter your name"
-          [disabled]="isLoading"
           class="form-input"
           (keyup.enter)="loadHelloWithName()"
         />
-        <button
-          (click)="loadHelloWithName()"
-          [disabled]="isLoading || !name.trim()"
-          class="btn btn-secondary"
-        >
+        <button (click)="loadHelloWithName()" [disabled]="!name.trim()" class="btn btn-secondary">
           Get Personal Hello
         </button>
       </div>

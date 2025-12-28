@@ -1,11 +1,31 @@
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * The content below * * * * * * * * * * * -->
-<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * -->
-<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * Delete the template below * * * * * * * * * -->
-<!-- * * * * * * * to get started with your project! * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<div class="app-container">
+  <nav class="app-nav">
+    <h1>Receipt OCR Demo</h1>
+    <div class="nav-links">
+      <button 
+        (click)="currentView = 'hello'" 
+        [class.active]="currentView === 'hello'"
+        class="nav-btn"
+      >
+        Hello World
+      </button>
+      <button 
+        (click)="currentView = 'receipt'" 
+        [class.active]="currentView === 'receipt'"
+        class="nav-btn"
+      >
+        Receipt Upload
+      </button>
+    </div>
+  </nav>
+  
+  <main class="app-content">
+    <app-hello-world *ngIf="currentView === 'hello'"></app-hello-world>
+    <app-receipt-upload *ngIf="currentView === 'receipt'"></app-receipt-upload>
+  </main>
+</div>
+
+<router-outlet />
 
 <style>
   :host {

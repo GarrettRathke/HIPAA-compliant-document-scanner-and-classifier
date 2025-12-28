@@ -18,7 +18,7 @@ export class HelloWorldComponent implements OnInit {
   isLoading: boolean = false;
   error: string = '';
 
-  constructor(private apiService: ApiService) {}
+  constructor(private readonly apiService: ApiService) {}
 
   ngOnInit(): void {
     this.loadHello();

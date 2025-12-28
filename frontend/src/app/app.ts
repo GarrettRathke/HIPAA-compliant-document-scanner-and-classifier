@@ -1,17 +1,17 @@
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { CommonModule } from '@angular/common';
 import { HelloWorldComponent } from './components/hello-world/hello-world.component';
+import { ReceiptUploadComponent } from './components/receipt-upload/receipt-upload.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, HelloWorldComponent],
-  template: `
-    <app-hello-world></app-hello-world>
-    <router-outlet />
-  `,
+  imports: [RouterOutlet, CommonModule, HelloWorldComponent, ReceiptUploadComponent],
+  templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App {
-  protected readonly title = signal('hello-world-app');
+  protected readonly title = signal('receipt-ocr-demo');
+  currentView: 'hello' | 'receipt' = 'receipt';
 }
 

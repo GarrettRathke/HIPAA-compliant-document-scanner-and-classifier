@@ -1,6 +1,8 @@
-# HelloWorld Monorepo
+# Receipt / Invoice Parser
 
-A simple HelloWorld application demonstrating a modern monorepo setup with .NET 10 Web API backend and Angular frontend, fully containerized with Docker for seamless development.
+A simple application demonstrating a modern monorepo setup with .NET 10 Web API backend and Angular frontend, fully containerized with Docker for seamless development. The use case
+is a proof-of-concept receipt / invoice parser. No document preprocessing is done, so the
+application only handles well-formed JPG / PNG images with good quality text.
 
 ## 🏗️ Architecture
 
@@ -21,7 +23,7 @@ A simple HelloWorld application demonstrating a modern monorepo setup with .NET 
 
 1. **Clone and navigate to the project:**
    ```bash
-   cd /path/to/HIPAA-compliant-document-scanner-and-classifier
+   cd /path/to/receipt-invoice-parser
    ```
 
 2. **Start the development environment:**

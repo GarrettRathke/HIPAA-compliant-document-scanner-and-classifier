@@ -1,9 +1,22 @@
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure OpenAI and file upload settings
+builder.Services.Configure<HelloWorld.Api.Models.OpenAISettings>(
+    builder.Configuration.GetSection("OpenAI"));
+builder.Services.Configure<HelloWorld.Api.Models.FileUploadSettings>(
+    builder.Configuration.GetSection("FileUpload"));
+
+// Register services
+builder.Services.AddScoped<HelloWorld.Api.Services.IOpenAIService, HelloWorld.Api.Services.OpenAIService>();
 
 // Configure CORS for development
 builder.Services.AddCors(options =>
