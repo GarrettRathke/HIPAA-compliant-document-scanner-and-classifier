@@ -23,6 +23,21 @@ dotnet build -c Release
 echo "📦 Publishing handler..."
 dotnet publish -c Release -o publish --self-contained true --no-restore -r linux-x64
 
+# Create runtimeconfig.json for the assembly (required for .NET 8 Lambda)
+echo "📝 Creating runtimeconfig.json..."
+cat > publish/ReceiptParserLambda.runtimeconfig.json << 'RUNTIMECONFIG'
+{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "rollForward": "latestFeature",
+    "framework": {
+      "name": "Microsoft.NETCore.App",
+      "version": "8.0.0"
+    }
+  }
+}
+RUNTIMECONFIG
+
 # Create deployment package
 echo "📦 Creating deployment package..."
 cd publish
