@@ -22,7 +22,7 @@ public class Function
     private readonly HttpClient _httpClient;
     private string? _openaiApiKey;
     private OpenAIClient? _openAIClient;
-    private const string OPENAI_MODEL = "gpt-4-vision";
+    private const string OPENAI_MODEL = "gpt-4.1-mini";
 
     public Function()
     {
@@ -105,12 +105,12 @@ public class Function
             // Initialize OpenAI client
             _openAIClient ??= new OpenAIClient(_openaiApiKey);
 
-            // Parse the request body (multipart form data)
-            var body = request.IsBase64Encoded 
-                ? Encoding.UTF8.GetString(Convert.FromBase64String(request.Body ?? ""))
-                : request.Body;
+            // Parse multipart form data - get body as bytes first
+            var bodyBytes = request.IsBase64Encoded 
+                ? Convert.FromBase64String(request.Body ?? "")
+                : Encoding.UTF8.GetBytes(request.Body ?? "");
 
-            if (string.IsNullOrEmpty(body))
+            if (bodyBytes.Length == 0)
             {
                 return new APIGatewayProxyResponse
                 {
@@ -132,7 +132,7 @@ public class Function
                 };
             }
 
-            var imageBytes = ExtractImageFromMultipart(body, boundary);
+            var imageBytes = ExtractImageFromMultipartBytes(bodyBytes, boundary);
             if (imageBytes == null || imageBytes.Length == 0)
             {
                 return new APIGatewayProxyResponse
@@ -145,13 +145,16 @@ public class Function
 
             LambdaLogger.Log($"Processing receipt image, size: {imageBytes.Length} bytes");
 
+            // Detect image format from the binary data
+            var mimeType = DetectImageMimeType(imageBytes);
+
             // Create the vision chat completion request
             var messages = new List<ChatMessage>
             {
                 new UserChatMessage(new List<ChatMessageContentPart>
                 {
                     ChatMessageContentPart.CreateTextPart(CreateExtractionPrompt()),
-                    ChatMessageContentPart.CreateImagePart(BinaryData.FromBytes(imageBytes), "image/jpeg")
+                    ChatMessageContentPart.CreateImagePart(BinaryData.FromBytes(imageBytes), mimeType)
                 })
             };
 
@@ -245,6 +248,121 @@ public class Function
         if (boundaryIndex == -1) return null;
 
         return contentType.Substring(boundaryIndex + boundaryPrefix.Length).Trim('"');
+    }
+
+    private byte[]? ExtractImageFromMultipartBytes(byte[] bodyBytes, string boundary)
+    {
+        try
+        {
+            var boundaryBytes = Encoding.UTF8.GetBytes($"--{boundary}");
+            var doubleCrlfBytes = Encoding.UTF8.GetBytes("\r\n\r\n");
+            var doubleLfBytes = Encoding.UTF8.GetBytes("\n\n");
+            var crlfBytes = Encoding.UTF8.GetBytes("\r\n");
+            var lfBytes = Encoding.UTF8.GetBytes("\n");
+
+            // Find all boundary positions
+            var parts = new List<(int start, int end)>();
+            var currentPos = 0;
+
+            while (currentPos < bodyBytes.Length)
+            {
+                var boundaryPos = FindBytes(bodyBytes, boundaryBytes, currentPos);
+                if (boundaryPos == -1) break;
+
+                var nextBoundaryPos = FindBytes(bodyBytes, boundaryBytes, boundaryPos + boundaryBytes.Length);
+                if (nextBoundaryPos == -1) nextBoundaryPos = bodyBytes.Length;
+
+                parts.Add((boundaryPos, nextBoundaryPos));
+                currentPos = nextBoundaryPos;
+            }
+
+            // Find the part with the image
+            foreach (var (partStart, partEnd) in parts)
+            {
+                var partBytes = new byte[partEnd - partStart];
+                Array.Copy(bodyBytes, partStart, partBytes, 0, partBytes.Length);
+                var partString = Encoding.UTF8.GetString(partBytes);
+
+                if (partString.Contains("filename="))
+                {
+                    // Find header end
+                    var headerEndIndex = FindBytes(partBytes, doubleCrlfBytes, 0);
+                    if (headerEndIndex == -1) headerEndIndex = FindBytes(partBytes, doubleLfBytes, 0);
+
+                    if (headerEndIndex != -1)
+                    {
+                        var dataStart = headerEndIndex == FindBytes(partBytes, doubleCrlfBytes, 0) ? headerEndIndex + 4 : headerEndIndex + 2;
+
+                        // Find data end (before next boundary or end of part)
+                        var dataEnd = FindBytes(partBytes, crlfBytes, dataStart);
+                        if (dataEnd == -1) dataEnd = FindBytes(partBytes, lfBytes, dataStart);
+                        if (dataEnd == -1) dataEnd = partBytes.Length;
+
+                        if (dataEnd > dataStart)
+                        {
+                            var imageData = new byte[dataEnd - dataStart];
+                            Array.Copy(partBytes, dataStart, imageData, 0, imageData.Length);
+                            
+                            LambdaLogger.Log($"Extracted image: {imageData.Length} bytes");
+                            return imageData;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LambdaLogger.Log($"Error extracting image from multipart bytes: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static int FindBytes(byte[] source, byte[] pattern, int startIndex = 0)
+    {
+        for (int i = startIndex; i <= source.Length - pattern.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < pattern.Length; j++)
+            {
+                if (source[i + j] != pattern[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return i;
+        }
+        return -1;
+    }
+
+    private string DetectImageMimeType(byte[] imageBytes)
+    {
+        // PNG magic bytes: 89 50 4E 47
+        if (imageBytes.Length >= 4 && imageBytes[0] == 0x89 && imageBytes[1] == 0x50 && 
+            imageBytes[2] == 0x4E && imageBytes[3] == 0x47)
+        {
+            LambdaLogger.Log("Detected PNG image format");
+            return "image/png";
+        }
+
+        // JPEG magic bytes: FF D8 FF
+        if (imageBytes.Length >= 3 && imageBytes[0] == 0xFF && imageBytes[1] == 0xD8 && imageBytes[2] == 0xFF)
+        {
+            LambdaLogger.Log("Detected JPEG image format");
+            return "image/jpeg";
+        }
+
+        // GIF magic bytes: 47 49 46
+        if (imageBytes.Length >= 3 && imageBytes[0] == 0x47 && imageBytes[1] == 0x49 && imageBytes[2] == 0x46)
+        {
+            LambdaLogger.Log("Detected GIF image format");
+            return "image/gif";
+        }
+
+        // Default to JPEG
+        LambdaLogger.Log("Image format not recognized, defaulting to image/jpeg");
+        return "image/jpeg";
     }
 
     private byte[]? ExtractImageFromMultipart(string body, string boundary)
