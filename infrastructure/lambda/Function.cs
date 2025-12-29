@@ -29,32 +29,122 @@ public class Function
 
         try
         {
-            // Load OpenAI API key from Secrets Manager (cached)
-            _openaiApiKey ??= await GetOpenAIApiKey();
+            // Route requests based on path
+            var path = request.Path ?? "";
+            var proxyPath = request.PathParameters?.ContainsKey("proxy") == true 
+                ? request.PathParameters["proxy"]
+                : "";
 
-            // Route requests to backend endpoint
-            // For local development, use environment variable BACKEND_URL
-            // For production, call the backend directly or implement business logic here
-            var backendUrl = Environment.GetEnvironmentVariable("BACKEND_URL") 
-                ?? "http://localhost:8080"; // Fallback for testing
-
-            var response = await ForwardRequest(request, backendUrl);
-            return response;
+            // Handle different endpoints
+            if (proxyPath.StartsWith("hello", StringComparison.OrdinalIgnoreCase))
+            {
+                return HandleHelloRequest(proxyPath);
+            }
+            else if (proxyPath.StartsWith("receipt/extract", StringComparison.OrdinalIgnoreCase))
+            {
+                return await HandleReceiptExtractRequest(request);
+            }
+            else
+            {
+                return new APIGatewayProxyResponse
+                {
+                    StatusCode = 404,
+                    Body = JsonSerializer.Serialize(new { error = "Not Found" }),
+                    Headers = CorsHeaders()
+                };
+            }
         }
         catch (Exception ex)
         {
-            LambdaLogger.Log($"Error: {ex.Message}");
+            LambdaLogger.Log($"Error: {ex.Message}\n{ex.StackTrace}");
             return new APIGatewayProxyResponse
             {
                 StatusCode = 500,
                 Body = JsonSerializer.Serialize(new { error = "Internal server error", message = ex.Message }),
-                Headers = new Dictionary<string, string>
-                {
-                    { "Content-Type", "application/json" },
-                    { "Access-Control-Allow-Origin", "*" }
-                }
+                Headers = CorsHeaders()
             };
         }
+    }
+
+    private APIGatewayProxyResponse HandleHelloRequest(string path)
+    {
+        var response = new
+        {
+            message = "Hello World from .NET Lambda!",
+            timestamp = DateTime.UtcNow
+        };
+
+        return new APIGatewayProxyResponse
+        {
+            StatusCode = 200,
+            Body = JsonSerializer.Serialize(response),
+            Headers = CorsHeaders("application/json")
+        };
+    }
+
+    private async Task<APIGatewayProxyResponse> HandleReceiptExtractRequest(APIGatewayProxyRequest request)
+    {
+        // Load OpenAI API key from Secrets Manager (cached)
+        _openaiApiKey ??= await GetOpenAIApiKey();
+
+        // Parse the request body
+        var body = request.IsBase64Encoded 
+            ? Encoding.UTF8.GetString(Convert.FromBase64String(request.Body ?? ""))
+            : request.Body;
+
+        if (string.IsNullOrEmpty(body))
+        {
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = 400,
+                Body = JsonSerializer.Serialize(new { error = "Request body is required" }),
+                Headers = CorsHeaders()
+            };
+        }
+
+        try
+        {
+            // Parse the FormData or JSON body
+            // For now, return a placeholder response
+            var response = new
+            {
+                success = true,
+                data = new
+                {
+                    vendor = "Sample Vendor",
+                    total = 99.99,
+                    date = DateTime.UtcNow.ToString("yyyy-MM-dd")
+                }
+            };
+
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = 200,
+                Body = JsonSerializer.Serialize(response),
+                Headers = CorsHeaders("application/json")
+            };
+        }
+        catch (Exception ex)
+        {
+            LambdaLogger.Log($"Error processing receipt: {ex.Message}");
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = 500,
+                Body = JsonSerializer.Serialize(new { error = "Failed to process receipt", message = ex.Message }),
+                Headers = CorsHeaders()
+            };
+        }
+    }
+
+    private Dictionary<string, string> CorsHeaders(string contentType = "application/json")
+    {
+        return new Dictionary<string, string>
+        {
+            { "Access-Control-Allow-Origin", "*" },
+            { "Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT,DELETE" },
+            { "Access-Control-Allow-Headers", "*" },
+            { "Content-Type", contentType }
+        };
     }
 
     private async Task<string> GetOpenAIApiKey()
@@ -76,98 +166,5 @@ public class Function
             LambdaLogger.Log($"Failed to retrieve OpenAI API key: {ex.Message}");
             throw;
         }
-    }
-
-    private async Task<APIGatewayProxyResponse> ForwardRequest(APIGatewayProxyRequest request, string backendUrl)
-    {
-        try
-        {
-            // Extract proxy path
-            var path = request.PathParameters?.ContainsKey("proxy") == true 
-                ? $"/api/{request.PathParameters["proxy"]}"
-                : "/api";
-
-            // Build query string from QueryStringParameters
-            var queryString = "";
-            if (request.QueryStringParameters != null && request.QueryStringParameters.Count > 0)
-            {
-                var queryParts = new List<string>();
-                foreach (var param in request.QueryStringParameters)
-                {
-                    queryParts.Add($"{Uri.EscapeDataString(param.Key)}={Uri.EscapeDataString(param.Value)}");
-                }
-                queryString = "?" + string.Join("&", queryParts);
-            }
-
-            var requestUri = new Uri($"{backendUrl}{path}{queryString}");
-            LambdaLogger.Log($"Forwarding to: {requestUri}");
-
-            // Create HTTP request
-            var httpRequest = new HttpRequestMessage
-            {
-                Method = new HttpMethod(request.HttpMethod),
-                RequestUri = requestUri
-            };
-
-            // Copy headers
-            if (request.Headers != null)
-            {
-                foreach (var header in request.Headers)
-                {
-                    if (!IsRestrictedHeader(header.Key))
-                    {
-                        httpRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
-                    }
-                }
-            }
-
-            // Copy body for POST/PUT/PATCH
-            if (!string.IsNullOrEmpty(request.Body) && 
-                (request.HttpMethod == "POST" || request.HttpMethod == "PUT" || request.HttpMethod == "PATCH"))
-            {
-                var body = request.IsBase64Encoded 
-                    ? Convert.FromBase64String(request.Body)
-                    : Encoding.UTF8.GetBytes(request.Body);
-                
-                httpRequest.Content = new ByteArrayContent(body);
-            }
-
-            // Send request to backend
-            var httpResponse = await _httpClient.SendAsync(httpRequest);
-            var responseBody = await httpResponse.Content.ReadAsStringAsync();
-
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)httpResponse.StatusCode,
-                Body = responseBody,
-                Headers = new Dictionary<string, string>
-                {
-                    { "Access-Control-Allow-Origin", "*" },
-                    { "Access-Control-Allow-Methods", "*" },
-                    { "Access-Control-Allow-Headers", "*" },
-                    { "Content-Type", httpResponse.Content.Headers.ContentType?.ToString() ?? "application/json" }
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            LambdaLogger.Log($"Error forwarding request: {ex.Message}");
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = 502,
-                Body = JsonSerializer.Serialize(new { error = "Bad Gateway", message = ex.Message }),
-                Headers = new Dictionary<string, string>
-                {
-                    { "Content-Type", "application/json" },
-                    { "Access-Control-Allow-Origin", "*" }
-                }
-            };
-        }
-    }
-
-    private static bool IsRestrictedHeader(string headerName)
-    {
-        var restricted = new[] { "host", "connection", "content-length", "transfer-encoding" };
-        return restricted.Contains(headerName.ToLower());
     }
 }

@@ -278,6 +278,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   origin {
     domain_name = regex("(?:https?://)?([^/]+)", aws_api_gateway_deployment.api_deployment.invoke_url)[0]
     origin_id   = "apiGatewayOrigin"
+    origin_path = "/${var.environment}"
 
     custom_origin_config {
       http_port              = 80
