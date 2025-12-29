@@ -29,7 +29,7 @@ cat > publish/ReceiptParserLambda.runtimeconfig.json << 'RUNTIMECONFIG'
 {
   "runtimeOptions": {
     "tfm": "net8.0",
-    "rollForward": "latestFeature",
+    "rollForward": "latestPatch",
     "framework": {
       "name": "Microsoft.NETCore.App",
       "version": "8.0.0"
