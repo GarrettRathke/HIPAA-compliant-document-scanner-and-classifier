@@ -56,7 +56,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     echo ""
     echo "📤 Uploading frontend to S3..."
-    aws s3 sync "$FRONTEND_DIST" "s3://$S3_BUCKET" --delete
+    aws s3 sync "$PROJECT_ROOT/frontend/dist/hello-world-app/browser/" "s3://$S3_BUCKET" --delete
     
     echo ""
     echo "🔄 Invalidating CloudFront cache..."
