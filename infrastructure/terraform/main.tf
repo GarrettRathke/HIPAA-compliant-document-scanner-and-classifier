@@ -117,6 +117,10 @@ resource "aws_api_gateway_rest_api" "api" {
     types = ["REGIONAL"]
   }
 
+  binary_media_types = [
+    "*/*"
+  ]
+
   tags = {
     Name = "${local.app_name}-api"
   }

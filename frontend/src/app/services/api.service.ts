@@ -19,11 +19,30 @@ export class ApiService {
   constructor(private readonly http: HttpClient) {}
 
   extractReceiptData(file: File): Observable<ReceiptExtractionResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
+    // Read file as base64 to ensure binary data integrity across HTTP transport
+    return new Observable((observer) => {
+      const reader = new FileReader();
 
-    return this.http
-      .post<ReceiptExtractionResponse>(`${this.receiptUrl}/extract`, formData)
-      .pipe(timeout(30000)); // 30 second timeout
+      reader.onload = () => {
+        // Extract base64 data (remove 'data:image/png;base64,' prefix if present)
+        const base64String = (reader.result as string).split(',')[1] || reader.result;
+
+        // Send base64-encoded data with a custom header to tell Lambda it's pre-encoded
+        this.http
+          .post<ReceiptExtractionResponse>(`${this.receiptUrl}/extract`, base64String, {
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+              'X-File-Content-Encoding': 'base64',
+            },
+          })
+          .subscribe(observer);
+      };
+
+      reader.onerror = (error) => {
+        observer.error(new Error('Failed to read file: ' + error));
+      };
+
+      reader.readAsDataURL(file);
+    });
   }
 }

@@ -56,7 +56,8 @@ public class Function
                 {
                     StatusCode = 404,
                     Body = JsonSerializer.Serialize(new { error = "Not Found" }),
-                    Headers = CorsHeaders()
+                    Headers = CorsHeaders(),
+                    IsBase64Encoded = false
                 };
             }
         }
@@ -67,7 +68,8 @@ public class Function
             {
                 StatusCode = 500,
                 Body = JsonSerializer.Serialize(new { error = "Internal server error", message = ex.Message }),
-                Headers = CorsHeaders()
+                Headers = CorsHeaders(),
+                IsBase64Encoded = false
             };
         }
     }
@@ -84,7 +86,8 @@ public class Function
         {
             StatusCode = 200,
             Body = JsonSerializer.Serialize(response),
-            Headers = CorsHeaders("application/json")
+            Headers = CorsHeaders("application/json"),
+            IsBase64Encoded = false
         };
     }
 
@@ -92,6 +95,17 @@ public class Function
     {
         try
         {
+            // Log request details for debugging
+            LambdaLogger.Log($"IsBase64Encoded: {request.IsBase64Encoded}");
+            
+            var contentType = request.Headers?.FirstOrDefault(h => 
+                h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)).Value ?? "unknown";
+            LambdaLogger.Log($"Content-Type: {contentType}");
+            
+            var fileEncoding = request.Headers?.FirstOrDefault(h => 
+                h.Key.Equals("X-File-Content-Encoding", StringComparison.OrdinalIgnoreCase)).Value ?? "binary";
+            LambdaLogger.Log($"X-File-Content-Encoding: {fileEncoding}");
+            
             // Load OpenAI API key from Secrets Manager (cached)
             _openaiApiKey ??= await GetOpenAIApiKey();
 
@@ -105,41 +119,39 @@ public class Function
             // Initialize OpenAI client
             _openAIClient ??= new OpenAIClient(_openaiApiKey);
 
-            // Parse multipart form data - get body as bytes first
-            var bodyBytes = request.IsBase64Encoded 
-                ? Convert.FromBase64String(request.Body ?? "")
-                : Encoding.UTF8.GetBytes(request.Body ?? "");
+            // Parse body - frontend sends base64-encoded file as text
+            byte[] imageBytes;
+        
+            if (fileEncoding.Equals("base64", StringComparison.OrdinalIgnoreCase))
+            {
+                // Frontend pre-encoded as base64
+                LambdaLogger.Log("Decoding base64-encoded file from frontend");
+                imageBytes = Convert.FromBase64String(request.Body ?? "");
+            }
+            else if (request.IsBase64Encoded)
+            {
+                // API Gateway base64-encoded the binary body
+                LambdaLogger.Log("Decoding base64-encoded body from API Gateway");
+                imageBytes = Convert.FromBase64String(request.Body ?? "");
+            }
+            else
+            {
+                // Fallback: treat as Latin1 (shouldn't happen with proper encoding)
+                LambdaLogger.Log("WARNING: Using Latin1 fallback for body decoding");
+                imageBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(request.Body ?? "");
+            }
 
-            if (bodyBytes.Length == 0)
+            LambdaLogger.Log($"Image bytes length: {imageBytes.Length}");
+            LambdaLogger.Log($"First 20 bytes: {BitConverter.ToString(imageBytes, 0, Math.Min(20, imageBytes.Length))}");
+        
+            if (imageBytes.Length == 0)
             {
                 return new APIGatewayProxyResponse
                 {
                     StatusCode = 400,
                     Body = JsonSerializer.Serialize(new { error = "Request body is required" }),
-                    Headers = CorsHeaders()
-                };
-            }
-
-            // Parse multipart form data
-            var boundary = ExtractBoundary(request.Headers);
-            if (string.IsNullOrEmpty(boundary))
-            {
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = 400,
-                    Body = JsonSerializer.Serialize(new { error = "Invalid Content-Type header" }),
-                    Headers = CorsHeaders()
-                };
-            }
-
-            var imageBytes = ExtractImageFromMultipartBytes(bodyBytes, boundary);
-            if (imageBytes == null || imageBytes.Length == 0)
-            {
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = 400,
-                    Body = JsonSerializer.Serialize(new { error = "No image file provided" }),
-                    Headers = CorsHeaders()
+                    Headers = CorsHeaders(),
+                    IsBase64Encoded = false
                 };
             }
 
@@ -147,6 +159,7 @@ public class Function
 
             // Detect image format from the binary data
             var mimeType = DetectImageMimeType(imageBytes);
+            LambdaLogger.Log($"Detected MIME type: {mimeType}");
 
             // Create the vision chat completion request
             var messages = new List<ChatMessage>
@@ -179,7 +192,8 @@ public class Function
                         processingStatus = "Success",
                         processedAt = DateTime.UtcNow
                     }),
-                    Headers = CorsHeaders("application/json")
+                    Headers = CorsHeaders("application/json"),
+                    IsBase64Encoded = false
                 };
             }
 
@@ -188,7 +202,8 @@ public class Function
             {
                 StatusCode = 500,
                 Body = JsonSerializer.Serialize(new { error = "No content received from OpenAI API" }),
-                Headers = CorsHeaders()
+                Headers = CorsHeaders(),
+                IsBase64Encoded = false
             };
         }
         catch (Exception ex)
@@ -198,7 +213,8 @@ public class Function
             {
                 StatusCode = 500,
                 Body = JsonSerializer.Serialize(new { error = "Failed to process receipt", message = ex.Message }),
-                Headers = CorsHeaders()
+                Headers = CorsHeaders(),
+                IsBase64Encoded = false
             };
         }
     }
@@ -230,156 +246,9 @@ public class Function
                 processingStatus = "Success",
                 processedAt = DateTime.UtcNow
             }),
-            Headers = CorsHeaders("application/json")
+            Headers = CorsHeaders("application/json"),
+            IsBase64Encoded = false
         };
-    }
-
-    private string? ExtractBoundary(IDictionary<string, string>? headers)
-    {
-        if (headers == null) return null;
-
-        var contentType = headers.FirstOrDefault(h => 
-            h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)).Value;
-
-        if (string.IsNullOrEmpty(contentType)) return null;
-
-        var boundaryPrefix = "boundary=";
-        var boundaryIndex = contentType.IndexOf(boundaryPrefix, StringComparison.OrdinalIgnoreCase);
-        if (boundaryIndex == -1) return null;
-
-        return contentType.Substring(boundaryIndex + boundaryPrefix.Length).Trim('"');
-    }
-
-    private byte[]? ExtractImageFromMultipartBytes(byte[] bodyBytes, string boundary)
-    {
-        try
-        {
-            var boundaryBytes = Encoding.UTF8.GetBytes($"\r\n--{boundary}");
-            var boundaryBytesLf = Encoding.UTF8.GetBytes($"\n--{boundary}");
-            var doubleCrlfBytes = Encoding.UTF8.GetBytes("\r\n\r\n");
-            var doubleLfBytes = Encoding.UTF8.GetBytes("\n\n");
-
-            // Find all parts by looking for boundaries
-            var currentPos = 0;
-            
-            while (currentPos < bodyBytes.Length)
-            {
-                // Find the part with filename=
-                var filenamePos = FindBytes(bodyBytes, Encoding.UTF8.GetBytes("filename="), currentPos);
-                if (filenamePos == -1) break;
-
-                // Find header end after filename
-                var headerEndCrlf = FindBytes(bodyBytes, doubleCrlfBytes, filenamePos);
-                var headerEndLf = FindBytes(bodyBytes, doubleLfBytes, filenamePos);
-                
-                int headerEnd = -1;
-                int dataStartOffset = 0;
-                
-                if (headerEndCrlf >= 0 && (headerEndLf < 0 || headerEndCrlf < headerEndLf))
-                {
-                    headerEnd = headerEndCrlf;
-                    dataStartOffset = 4; // length of \r\n\r\n
-                }
-                else if (headerEndLf >= 0)
-                {
-                    headerEnd = headerEndLf;
-                    dataStartOffset = 2; // length of \n\n
-                }
-
-                if (headerEnd != -1)
-                {
-                    var dataStart = headerEnd + dataStartOffset;
-
-                    // Find the next boundary to determine where data ends
-                    var nextBoundaryCrlf = FindBytes(bodyBytes, boundaryBytes, dataStart);
-                    var nextBoundaryLf = FindBytes(bodyBytes, boundaryBytesLf, dataStart);
-                    
-                    int dataEnd = -1;
-                    if (nextBoundaryCrlf >= 0 && (nextBoundaryLf < 0 || nextBoundaryCrlf < nextBoundaryLf))
-                    {
-                        dataEnd = nextBoundaryCrlf;
-                    }
-                    else if (nextBoundaryLf >= 0)
-                    {
-                        dataEnd = nextBoundaryLf;
-                    }
-                    else
-                    {
-                        // Last boundary might be --boundary-- at the end
-                        var endBoundary = Encoding.UTF8.GetBytes($"--{boundary}--");
-                        var endBoundaryPos = FindBytes(bodyBytes, endBoundary, dataStart);
-                        dataEnd = endBoundaryPos >= 0 ? endBoundaryPos : bodyBytes.Length;
-                    }
-
-                    if (dataEnd > dataStart)
-                    {
-                        var rawImageData = new byte[dataEnd - dataStart];
-                        Array.Copy(bodyBytes, dataStart, rawImageData, 0, rawImageData.Length);
-                        
-                        // Trim trailing whitespace/newlines from the image data
-                        var imageData = TrimTrailingWhitespace(rawImageData);
-                        
-                        LambdaLogger.Log($"Extracted image: {imageData.Length} bytes (raw: {rawImageData.Length}), from position {dataStart} to {dataEnd}");
-                        return imageData;
-                    }
-                }
-
-                currentPos = filenamePos + 10;
-            }
-        }
-        catch (Exception ex)
-        {
-            LambdaLogger.Log($"Error extracting image from multipart bytes: {ex.Message}\n{ex.StackTrace}");
-        }
-
-        return null;
-    }
-
-    private static int FindBytes(byte[] source, byte[] pattern, int startIndex = 0)
-    {
-        for (int i = startIndex; i <= source.Length - pattern.Length; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < pattern.Length; j++)
-            {
-                if (source[i + j] != pattern[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) return i;
-        }
-        return -1;
-    }
-
-    private static byte[] TrimTrailingWhitespace(byte[] data)
-    {
-        int endIndex = data.Length - 1;
-        
-        // Trim from the end, removing whitespace bytes: \r (0x0D), \n (0x0A), space (0x20), tab (0x09)
-        while (endIndex >= 0)
-        {
-            byte b = data[endIndex];
-            if (b == 0x0D || b == 0x0A || b == 0x20 || b == 0x09)
-            {
-                endIndex--;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        if (endIndex < data.Length - 1)
-        {
-            var trimmed = new byte[endIndex + 1];
-            Array.Copy(data, 0, trimmed, 0, endIndex + 1);
-            LambdaLogger.Log($"Trimmed {data.Length - trimmed.Length} trailing whitespace bytes");
-            return trimmed;
-        }
-
-        return data;
     }
 
     private string DetectImageMimeType(byte[] imageBytes)
@@ -406,46 +275,18 @@ public class Function
             return "image/gif";
         }
 
+        // WebP magic bytes: 52 49 46 46 ... 57 45 42 50
+        if (imageBytes.Length >= 12 && 
+            imageBytes[0] == 0x52 && imageBytes[1] == 0x49 && imageBytes[2] == 0x46 && imageBytes[3] == 0x46 &&
+            imageBytes[8] == 0x57 && imageBytes[9] == 0x45 && imageBytes[10] == 0x42 && imageBytes[11] == 0x50)
+        {
+            LambdaLogger.Log("Detected WebP image format");
+            return "image/webp";
+        }
+
         // Default to JPEG
         LambdaLogger.Log("Image format not recognized, defaulting to image/jpeg");
         return "image/jpeg";
-    }
-
-    private byte[]? ExtractImageFromMultipart(string body, string boundary)
-    {
-        try
-        {
-            var parts = body.Split(new[] { $"--{boundary}" }, StringSplitOptions.None);
-
-            foreach (var part in parts)
-            {
-                if (part.Contains("filename="))
-                {
-                    // Find the start of the actual image data (after headers and blank line)
-                    var headerEndIndex = part.IndexOf("\r\n\r\n");
-                    if (headerEndIndex == -1) headerEndIndex = part.IndexOf("\n\n");
-
-                    if (headerEndIndex != -1)
-                    {
-                        var dataStart = headerEndIndex + 4;
-                        var dataEnd = part.LastIndexOf("\r\n");
-                        if (dataEnd == -1) dataEnd = part.LastIndexOf("\n");
-
-                        if (dataEnd > dataStart)
-                        {
-                            var imageData = part.Substring(dataStart, dataEnd - dataStart);
-                            return Encoding.UTF8.GetBytes(imageData);
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LambdaLogger.Log($"Error extracting image from multipart: {ex.Message}");
-        }
-
-        return null;
     }
 
     private Dictionary<string, object> ParseExtractionResponse(string response)
